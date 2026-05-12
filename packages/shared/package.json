@@ -1,0 +1,13 @@
+{
+  "name": "@levvl/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/types/index.ts",
+  "types": "src/types/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
