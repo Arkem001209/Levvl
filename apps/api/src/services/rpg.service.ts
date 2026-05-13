@@ -28,6 +28,7 @@ export const ACTIVITY_TYPE_BONUS: Record<ActivityType, number> = {
   hiking:   0.9,
   yoga:     0.75, // lower XP but still grows focus and vitality meaningfully
   other:    0.8,
+  rowing:   1.2,
 }
 
 // -----------------------------------------------------------------------------
@@ -92,6 +93,13 @@ export const STAT_RELEVANCE: Record<ActivityType, Partial<Record<StatName, numbe
   },
   other: {
     endurance: 0.35,
+    vitality:  0.35,
+  },
+  rowing: {
+    strength: 1.0,
+    focus: 1.0,
+    endurance: 1.0,
+    agility: 0.35,
     vitality:  0.35,
   },
 }

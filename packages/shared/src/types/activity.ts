@@ -6,6 +6,7 @@ export type ActivityType =
   | 'hiking'
   | 'yoga'
   | 'hiit'
+  | 'rowing'
   | 'other'
 
 export type TrackerSource = 'strava' | 'coros' | 'manual'
