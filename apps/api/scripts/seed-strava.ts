@@ -89,8 +89,8 @@ const stravaTypeMap: Record<string, ActivityType> = {
 // --- Strava API call -------------------------------------------------------
 
 async function fetchStravaActivities(): Promise<StravaActivity[]> {
-  // Unix timestamp for 7 days ago — Strava's `after` param filters by start date
-  const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000)
+  // Unix timestamp for 30 days ago — Strava's `after` param filters by start date
+  const sevenDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000)
 
   const res = await fetch(
     `https://www.strava.com/api/v3/athlete/activities?after=${sevenDaysAgo}&per_page=50`,
