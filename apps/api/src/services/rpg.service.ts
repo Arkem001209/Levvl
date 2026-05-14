@@ -174,3 +174,244 @@ export const VISUAL_DESCRIPTORS = {
     { threshold: 100, text: 'unbreakable is not a metaphor' },
   ],
 } as const
+
+// =============================================================================
+// Section 2: Pure helper functions
+//
+// Each function does one thing. None of them read from or write to the database.
+// They are exported so the test script can call them individually.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// getIntensityMultiplier
+//
+// Converts an average heart rate into a zone multiplier using percentage of
+// max HR. This is more accurate than absolute bpm thresholds because zones
+// are personal — 160bpm is easy for one person and hard for another.
+//
+// Zone boundaries follow the standard 5-zone model:
+//   Zone 1 (very easy): < 60% max HR
+//   Zone 2 (easy):      60–70%
+//   Zone 3 (moderate):  70–80%
+//   Zone 4 (hard):      80–90%
+//   Zone 5 (max):       ≥ 90%
+//
+// maxHr defaults to 207 (the user's measured max). When we add user profiles
+// we can pass each user's actual max HR in here instead.
+// -----------------------------------------------------------------------------
+export function getIntensityMultiplier(avgHeartRate: number | null, maxHr: number = 207): number {
+  if (avgHeartRate === null) return 1.0 // no HR data — use neutral multiplier
+
+  const pct = avgHeartRate / maxHr
+
+  if (pct < 0.60) return 0.4  // zone 1 — very easy, recovery effort
+  if (pct < 0.70) return 0.7  // zone 2 — easy, aerobic base building
+  if (pct < 0.80) return 1.0  // zone 3 — moderate, tempo effort
+  if (pct < 0.90) return 1.35 // zone 4 — hard, threshold work
+  return 1.6                  // zone 5 — max, all-out effort
+}
+
+// For 207 bpm max HR, the zone breakpoints in absolute bpm are:
+//   Zone 1: < 124 bpm
+//   Zone 2: 124–145 bpm
+//   Zone 3: 145–166 bpm
+//   Zone 4: 166–186 bpm
+//   Zone 5: ≥ 186 bpm
+
+// -----------------------------------------------------------------------------
+// getStreakMultiplier
+//
+// Rewards consistent training. Caps at 1.6x after 15 days so it's meaningful
+// but not so dominant that it overshadows the activity itself.
+// -----------------------------------------------------------------------------
+export function getStreakMultiplier(streakDays: number): number {
+  return 1 + Math.min(streakDays * 0.04, 0.6)
+  // 0 days:   1.0x
+  // 5 days:   1.2x
+  // 10 days:  1.4x
+  // 15+ days: 1.6x (capped)
+}
+
+// -----------------------------------------------------------------------------
+// xpRequiredForLevel
+//
+// Returns the total XP needed to reach a given level from level 1.
+// The exponent (1.9) makes early levels fast and later levels much slower.
+//
+// Examples:
+//   Level 2:   142 XP   (~2 moderate workouts)
+//   Level 10:  2,981 XP (~6–8 weeks)
+//   Level 25:  16,488 XP (~6 months)
+//   Level 50:  59,703 XP (~18 months)
+// -----------------------------------------------------------------------------
+export function xpRequiredForLevel(level: number): number {
+  return Math.round(75 * Math.pow(level, 1.9))
+}
+
+// -----------------------------------------------------------------------------
+// calculateLevel
+//
+// Given a total XP amount, returns the current level.
+// Increments through levels until the XP required for the next level exceeds
+// what the character has. The character is always "in" the highest level
+// they have enough XP to reach.
+// -----------------------------------------------------------------------------
+export function calculateLevel(xpTotal: number): number {
+  let level = 1
+  // Keep climbing as long as the character has enough XP for the next level
+  while (xpTotal >= xpRequiredForLevel(level + 1)) {
+    level++
+  }
+  return level
+}
+
+// -----------------------------------------------------------------------------
+// diminishingReturn
+//
+// Slows stat growth as values get higher, but never stops it entirely.
+// At stat 1 the multiplier is ~0.99 (almost full gain).
+// At stat 100 it's ~0.56 (still meaningful, just slower).
+//
+// Formula: 1 / (1 + 0.008 * currentValue)
+// -----------------------------------------------------------------------------
+export function diminishingReturn(currentValue: number): number {
+  return 1 / (1 + 0.008 * currentValue)
+}
+
+// -----------------------------------------------------------------------------
+// calculateStatGain
+//
+// How much a single activity grows one stat. Combines all the modifiers:
+//   baseGain (0.15) × relevance × intensityMultiplier × diminishingReturn
+//
+// Returns a small decimal like 0.1243 — stats are stored with 4 decimal
+// places so these fractional gains accumulate accurately over time.
+// -----------------------------------------------------------------------------
+export function calculateStatGain(
+  currentValue: number,
+  relevance: number,       // from STAT_RELEVANCE: 1.0 (primary) or 0.35 (secondary)
+  intensityMultiplier: number
+): number {
+  const BASE_GAIN = 0.15
+  return BASE_GAIN * relevance * intensityMultiplier * diminishingReturn(currentValue)
+}
+
+// -----------------------------------------------------------------------------
+// getStatDescriptor
+//
+// Returns the visual description for a stat at its current value.
+// Walks the VISUAL_DESCRIPTORS array and returns the highest threshold crossed.
+//
+// Example: endurance at 18 → "a steady, patient stride" (threshold 15)
+// -----------------------------------------------------------------------------
+export function getStatDescriptor(statName: StatName, value: number): string {
+  const descriptors = VISUAL_DESCRIPTORS[statName]
+
+  // Walk backwards through the thresholds — return the first one the value meets
+  for (let i = descriptors.length - 1; i >= 0; i--) {
+    if (value >= descriptors[i].threshold) {
+      return descriptors[i].text
+    }
+  }
+
+  // value is below the first threshold — return the starting descriptor
+  return descriptors[0].text
+}
+
+// =============================================================================
+// Section 3: Main function
+//
+// processActivity ties all the helpers together. It takes three database rows
+// as input and returns an ActivityRpgResult — the full outcome of one activity.
+//
+// The caller (eventually the webhook handler) is responsible for:
+//   - passing in the current character and stats rows
+//   - saving the returned result to activity_rpg_results
+//   - applying xpAwarded to characters and statDeltas to character_stats
+// =============================================================================
+
+// These interfaces describe the shape of the database rows this function needs.
+// They only include the columns actually used — not the full row.
+// The `number` type for stats works because Postgres numeric comes back as a
+// JS number when read via the Supabase client.
+export interface ActivityRow {
+  id: string
+  activity_type: ActivityType
+  duration_seconds: number
+  avg_heart_rate: number | null
+}
+
+export interface CharacterRow {
+  xp_total: number
+  level: number
+  streak_days: number
+}
+
+export interface CharacterStatsRow {
+  endurance:  number
+  strength:   number
+  agility:    number
+  vitality:   number
+  focus:      number
+  resilience: number
+}
+
+// The return type is imported from shared — it's the same shape that gets
+// saved to activity_rpg_results and returned to the frontend.
+import type { ActivityRpgResult } from '@levvl/shared'
+
+const STAT_NAMES: StatName[] = ['endurance', 'strength', 'agility', 'vitality', 'focus', 'resilience']
+
+export function processActivity(
+  activity: ActivityRow,
+  character: CharacterRow,
+  stats: CharacterStatsRow
+): ActivityRpgResult {
+  const durationMinutes = activity.duration_seconds / 60
+
+  // Step 1: calculate each multiplier individually so we can store the breakdown
+  const intensityMultiplier = getIntensityMultiplier(activity.avg_heart_rate)
+  const activityTypeBonus   = ACTIVITY_TYPE_BONUS[activity.activity_type]
+  const streakMultiplier    = getStreakMultiplier(character.streak_days)
+
+  // Step 2: XP formula — duration in minutes × 1.5 × all three multipliers
+  const base       = durationMinutes * 1.5
+  const xpAwarded  = Math.round(base * intensityMultiplier * activityTypeBonus * streakMultiplier)
+
+  // Step 3: stat gains — iterate over all six stats and calculate the gain
+  // for each one that this activity type has relevance for.
+  // `statDeltas` only includes stats that actually changed (relevance > 0).
+  const relevanceMap = STAT_RELEVANCE[activity.activity_type]
+  const statDeltas: Partial<Record<StatName, number>> = {}
+
+  for (const stat of STAT_NAMES) {
+    const relevance = relevanceMap[stat] ?? 0
+    if (relevance === 0) continue // this activity doesn't train this stat
+
+    const gain = calculateStatGain(stats[stat], relevance, intensityMultiplier)
+    // Round to 4 decimal places — matches the numeric(8,4) column precision
+    statDeltas[stat] = Math.round(gain * 10000) / 10000
+  }
+
+  // Step 4: work out the new level from the updated total XP
+  const newXpTotal = character.xp_total + xpAwarded
+  const levelAfter = calculateLevel(newXpTotal)
+  const levelUp    = levelAfter > character.level
+
+  return {
+    activityId: activity.id,
+    xpAwarded,
+    xpBreakdown: {
+      base:                Math.round(base),
+      intensityMultiplier,
+      activityTypeBonus,
+      streakMultiplier,
+    },
+    statDeltas,
+    // Loot and titles are handled by separate services (not built yet)
+    lootDropped: false,
+    lootItemId:  null,
+    levelUp,
+    levelAfter,
+  }
+}
