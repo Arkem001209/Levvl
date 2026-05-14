@@ -5,6 +5,7 @@ import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
 import { logger } from './lib/logger'
 import { authRouter } from './routes/auth.routes'
+import { characterRouter } from './routes/character.routes'
 
 const app = express()
 const port = process.env.API_PORT ?? '3001'
@@ -19,8 +20,8 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Route handlers — add new routers here as you build each feature
 app.use('/api/auth', authRouter)
+app.use('/api/character', characterRouter)
 // app.use('/api/activities', activitiesRouter)
-// app.use('/api/character', characterRouter)
 // app.use('/api/quests', questsRouter)
 // app.use('/api/guilds', guildsRouter)
 // app.use('/api/webhooks', webhooksRouter)
