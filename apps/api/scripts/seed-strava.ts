@@ -86,6 +86,8 @@ const stravaTypeMap: Record<string, ActivityType> = {
   Yoga:           'yoga',
   Rowing:         'rowing',
   VirtualRow:     'rowing',
+  RockClimbing:   'climbing',
+  IceClimbing:    'climbing',
 }
 
 // --- Strava API call -------------------------------------------------------
