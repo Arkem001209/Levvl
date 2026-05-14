@@ -1,8 +1,9 @@
 // RPG engine — all XP and stat calculations live here.
-// This file is pure functions and typed constants: no database calls, no side effects.
-// The route handler calls these functions and is responsible for saving the results.
+// Sections 1–3 are pure functions and typed constants (no database calls).
+// Section 4 (applyRpgResult) writes the results to Supabase.
 
-import type { ActivityType, StatName } from '@levvl/shared'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ActivityType, ActivityRpgResult, StatName } from '@levvl/shared'
 
 // =============================================================================
 // Section 1: Constants
@@ -348,9 +349,12 @@ export interface ActivityRow {
 }
 
 export interface CharacterRow {
+  id: string
+  user_id: string
   xp_total: number
   level: number
   streak_days: number
+  last_activity_at: string | null
 }
 
 export interface CharacterStatsRow {
@@ -361,10 +365,6 @@ export interface CharacterStatsRow {
   focus:      number
   resilience: number
 }
-
-// The return type is imported from shared — it's the same shape that gets
-// saved to activity_rpg_results and returned to the frontend.
-import type { ActivityRpgResult } from '@levvl/shared'
 
 const STAT_NAMES: StatName[] = ['endurance', 'strength', 'agility', 'vitality', 'focus', 'resilience']
 
@@ -420,4 +420,103 @@ export function processActivity(
     levelUp,
     levelAfter,
   }
+}
+
+// =============================================================================
+// Section 4: applyRpgResult
+//
+// Writes the output of processActivity to three tables in sequence.
+// This is the only function in this file that talks to the database.
+// =============================================================================
+
+// Returns the streak count after accounting for the new activity's date.
+function calculateNewStreak(
+  currentStreak: number,
+  lastActivityAt: string | null,
+  activityStartedAt: string
+): number {
+  if (lastActivityAt === null) return 1 // first activity ever
+
+  // Slice to "YYYY-MM-DD" so we compare calendar days, not timestamps.
+  // Avoids bugs where two activities on the same UTC day are 23h apart.
+  const lastDate     = new Date(lastActivityAt.slice(0, 10))
+  const activityDate = new Date(activityStartedAt.slice(0, 10))
+  const diffDays     = Math.round(
+    (activityDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  if (diffDays === 0) return currentStreak     // same day — don't double-count
+  if (diffDays === 1) return currentStreak + 1 // consecutive day — extend streak
+  return 1                                     // gap — streak broken
+}
+
+export async function applyRpgResult(
+  result: ActivityRpgResult,
+  character: CharacterRow,
+  currentStats: CharacterStatsRow,
+  activityStartedAt: string,
+  supabase: SupabaseClient
+): Promise<void> {
+
+  // Step 1: idempotency check — skip if this activity has already been processed.
+  // The unique constraint on activity_rpg_results.activity_id would also catch
+  // this, but checking first gives us a clean early exit with no error noise.
+  const { data: existing } = await supabase
+    .from('activity_rpg_results')
+    .select('id')
+    .eq('activity_id', result.activityId)
+    .single()
+
+  if (existing) {
+    console.log(`  Skipping ${result.activityId} — already processed`)
+    return
+  }
+
+  // Step 2: calculate the new streak before any writes
+  const newStreak  = calculateNewStreak(character.streak_days, character.last_activity_at, activityStartedAt)
+  const newXpTotal = character.xp_total + result.xpAwarded
+  // xp_current is the progress within the current level (resets to 0 on level-up)
+  const newXpCurrent = newXpTotal - xpRequiredForLevel(result.levelAfter)
+
+  // Step 3: insert the audit record
+  const { error: rpgError } = await supabase.from('activity_rpg_results').insert({
+    activity_id:  result.activityId,
+    user_id:      character.user_id,
+    xp_awarded:   result.xpAwarded,
+    xp_breakdown: result.xpBreakdown,
+    stat_deltas:  result.statDeltas,
+    loot_dropped: result.lootDropped,
+    loot_item_id: result.lootItemId,
+    level_up:     result.levelUp,
+    level_after:  result.levelAfter,
+  })
+  if (rpgError) throw new Error(`activity_rpg_results insert failed: ${rpgError.message}`)
+
+  // Step 4: apply stat deltas — add each gain to the current stat value
+  const statUpdate: Partial<CharacterStatsRow> = {}
+  for (const [stat, delta] of Object.entries(result.statDeltas) as [StatName, number][]) {
+    statUpdate[stat] = Math.round((currentStats[stat] + delta) * 10000) / 10000
+  }
+
+  if (Object.keys(statUpdate).length > 0) {
+    const { error: statsError } = await supabase
+      .from('character_stats')
+      .update({ ...statUpdate, updated_at: new Date().toISOString() })
+      .eq('character_id', character.id)
+    if (statsError) throw new Error(`character_stats update failed: ${statsError.message}`)
+  }
+
+  // Step 5: update the character row
+  const { error: characterError } = await supabase
+    .from('characters')
+    .update({
+      xp_total:         newXpTotal,
+      xp_current:       newXpCurrent,
+      level:            result.levelAfter,
+      streak_days:      newStreak,
+      last_activity_at: activityStartedAt,
+      updated_at:       new Date().toISOString(),
+    })
+    .eq('id', character.id)
+  if (characterError) throw new Error(`characters update failed: ${characterError.message}`)
 }
