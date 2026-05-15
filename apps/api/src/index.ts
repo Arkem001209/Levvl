@@ -7,6 +7,7 @@ import { logger } from './lib/logger'
 import { authRouter } from './routes/auth.routes'
 import { characterRouter } from './routes/character.routes'
 import { stravaRouter } from './routes/strava.routes'
+import { webhookRouter } from './routes/webhook.routes'
 
 const app = express()
 const port = process.env.API_PORT ?? '3001'
@@ -23,10 +24,10 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter)
 app.use('/api/auth/strava', stravaRouter)
 app.use('/api/character', characterRouter)
+app.use('/api/webhooks/strava', webhookRouter)
 // app.use('/api/activities', activitiesRouter)
 // app.use('/api/quests', questsRouter)
 // app.use('/api/guilds', guildsRouter)
-// app.use('/api/webhooks', webhooksRouter)
 
 // 404 — any request that didn't match a route above ends up here
 app.use((_req: Request, res: Response) => {
