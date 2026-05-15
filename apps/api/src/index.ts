@@ -6,6 +6,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { logger } from './lib/logger'
 import { authRouter } from './routes/auth.routes'
 import { characterRouter } from './routes/character.routes'
+import { stravaRouter } from './routes/strava.routes'
 
 const app = express()
 const port = process.env.API_PORT ?? '3001'
@@ -20,6 +21,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Route handlers — add new routers here as you build each feature
 app.use('/api/auth', authRouter)
+app.use('/api/auth/strava', stravaRouter)
 app.use('/api/character', characterRouter)
 // app.use('/api/activities', activitiesRouter)
 // app.use('/api/quests', questsRouter)
