@@ -1,0 +1,253 @@
+/* ─── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Design tokens ─────────────────────────────────────────────────────────
+   The entire colour palette lives here. Change a value once, it updates
+   everywhere. CSS custom properties (variables) work like this:
+     --name: value;            ← define
+     color: var(--name);       ← use
+────────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds — deep navy, layered */
+  --bg-base:    #060d18;
+  --bg-surface: #0b1628;
+  --bg-card:    #0f1e35;
+  --bg-raised:  #152540;
+
+  /* Borders */
+  --border:        rgba(255, 255, 255, 0.05);
+  --border-accent: rgba(96, 165, 250, 0.25);
+
+  /* Text */
+  --text-primary:   #dde6f5;
+  --text-secondary: #7a90b4;
+  --text-muted:     #384d6b;
+
+  /* Accent — electric slate-blue */
+  --accent:       #60a5fa;
+  --accent-dim:   #1e40af;
+  --accent-glow:  rgba(96, 165, 250, 0.12);
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────────── */
+html, body, #root {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+.page {
+  min-height: 100vh;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-12);
+}
+
+/* ─── Logo ───────────────────────────────────────────────────────────────── */
+.logo {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.7;
+  margin-bottom: var(--space-12);
+  display: block;
+}
+
+/* ─── Divider ─────────────────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-8) 0;
+}
+
+/* ─── Section labels ──────────────────────────────────────────────────────── */
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-5);
+}
+
+/* ─── Character header ────────────────────────────────────────────────────── */
+.character-class {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.character-level {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-2);
+}
+
+.character-level span {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-left: var(--space-2);
+}
+
+/* ─── XP bar ─────────────────────────────────────────────────────────────── */
+.xp-bar-wrap {
+  margin-bottom: var(--space-3);
+}
+
+.xp-bar-track {
+  height: 3px;
+  background: var(--bg-raised);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 2px;
+  /* CSS transition — smoothly animates when the width value changes */
+  transition: width 0.6s ease;
+  /* box-shadow creates the glow effect around the bar */
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.xp-bar-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.xp-bar-meta strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ─── Stats ──────────────────────────────────────────────────────────────── */
+.stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-row {
+  display: grid;
+  /* Three columns: name (fixed) | value (fixed) | descriptor (fills rest) */
+  grid-template-columns: 110px 52px 1fr;
+  align-items: baseline;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+}
+
+.stat-row:last-child { border-bottom: none; }
+
+.stat-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.stat-descriptor {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ─── Activity list ───────────────────────────────────────────────────────── */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-row {
+  display: grid;
+  /* Name | type | duration | xp */
+  grid-template-columns: 1fr 80px 56px 64px;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+}
+
+.activity-row:last-child { border-bottom: none; }
+
+.activity-name {
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-type {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.activity-duration {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-xp {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ─── Loading / error states ─────────────────────────────────────────────── */
+.state-message {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: var(--space-8) 0;
+}
